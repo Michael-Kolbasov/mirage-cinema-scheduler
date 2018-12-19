@@ -20,7 +20,7 @@
 *.rar
 
 .idea
-taget
+target
 *.iml
 resources
 
