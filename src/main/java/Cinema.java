@@ -4,10 +4,7 @@ import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLConnection;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 
 /**
  * The Cinema class parses data from particular Cinema object and formats it.
@@ -172,21 +169,26 @@ public class Cinema {
         }
 
         /**
-         * Step 4. Format the raw html code to the raw List of Strings.
-         * @param htmlPage  raw html code.
-         * @return  raw List of Strings.
+         * Step 4. Format the raw html code with needed strings to the raw List of Strings.
+         * @param htmlPage  raw html code with needed strings.
+         * @return  raw List of needed Strings.
          */
         private List<String> createRawSchedule(String htmlPage) {
             String[] slices = htmlPage.split(System.getProperty("line.separator"));
             List<String> rawDataList = new ArrayList<>();
             for (String string : slices) {
                 string = string.trim();
-                if (string.startsWith("<td class=\"col1\">")     //время
-                        || (checkStringForStartingByOnlyRussianLettersOrDigits(string) && string.endsWith("</a>"))  //название фильма
-                        || (string.contains("Цифровой") || string.contains("Трехмерная"))   //формат
-                        || checkStringForBeingAnAgeLimit(string)    //возрастное ограничение
-                        || string.startsWith("<b>Зал")   //зал
-                        || string.contains("<span class=\"price-data\">"))    //цена
+                if (string.startsWith("<td class=\"col1\">")     //время    (time)
+                        || (checkStringForStartingByOnlyRussianLettersOrDigits(string) && string.endsWith("</a>"))  //название фильма   (film name)
+                        || (string.contains("Цифровой") || string.contains("Трехмерная"))   //формат    (format)
+                        || checkStringForBeingAnAgeLimit(string)    //возрастное ограничение    (age limit)
+                        || string.startsWith("<b>Зал")   //зал  (auditorium)
+                        || string.contains("<span class=\"price-data\">")   //цена  (price)
+                        || string.startsWith("<i class=\"ico chair\"></i>")    //сиденье   (chair)
+                        || string.startsWith("<i class=\"ico inv\"></i>")    //инвалидное кресло    (invalid armchair)
+                        || string.startsWith("<i class=\"ico armchair\"></i>")    //кресло  (armchair)
+                        || string.startsWith("<i class=\"ico double-armchair\"></i>")    //двойное кресло   (double armchair)
+                        || string.startsWith("<i class=\"ico triple-armchair\"></i>"))    //тройное кресло  (triple armchair)
                 {
                     rawDataList.add(string);
                 }
@@ -212,19 +214,57 @@ public class Cinema {
                     content = "Возрастное ограничение: " + content;
                 }
                 if (content.startsWith("<b>Зал")) {
-                    content = content.replaceAll("<b>Зал ", "Зал: ");
+                    content = content.replaceAll("<b>Зал", "Зал:");
+                    content = content.replaceAll("</b>", "");
                 }
-                content = content.replaceAll("<td class=\"col1\"><b>", "Время: ");
-                content = content.replaceAll("<td class=\"col3\"><i class=\"ico ico-2d\" title=\"Цифровой\"></i>", "Формат: 2D");
-                content = content.replaceAll("<td class=\"col3\"><i class=\"ico ico-3d\" title=\"Трехмерная\"></i>", "Формат: 3D");
-                content = content.replaceAll("<span class=\"price-data\">", "Цена: ");
-                content = content.replaceAll("</span>", "");
-                content = content.replaceAll("<span style='display:none;'>24", "");
-                content = content.replaceAll("</b>", "");
-                content = content.replaceAll("</td>", "");
-                content = content.replaceAll("</a>", "");
-                content = content.replaceAll("~", "");
-                content = content.replaceAll("Dolby Atmos", "");
+                if (content.startsWith("<td class=\"col1\"><b>")) {
+                    content = content.replaceAll("<td class=\"col1\"><b>", "Время: ");
+                    content = content.replaceAll("</b>", "");
+                    content = content.replaceAll("</td>", "");
+                }
+                if (content.startsWith("<td class=\"col3\"><i class=\"ico ico-2d\" title=\"Цифровой\"></i>")) {
+                    content = content.replaceAll("<td class=\"col3\"><i class=\"ico ico-2d\" title=\"Цифровой\"></i>", "Формат: 2D");
+                    content = content.replaceAll("</td>", "");
+                }
+                if (content.startsWith("<td class=\"col3\"><i class=\"ico ico-3d\" title=\"Трехмерная\"></i>")) {
+                    content = content.replaceAll("<td class=\"col3\"><i class=\"ico ico-3d\" title=\"Трехмерная\"></i>", "Формат: 3D");
+                    content = content.replaceAll("</td>", "");
+                }
+                if (content.startsWith("<i class=\"ico chair\"></i>")) {
+                    content = content.replaceAll("<i class=\"ico chair\"></i>", "Сиденье");
+                }
+                if (content.startsWith("<i class=\"ico armchair\"></i>")) {
+                    content = content.replaceAll("<i class=\"ico armchair\"></i>", "Кресло");
+                }
+                if (content.startsWith("<i class=\"ico inv\"></i>")) {
+                    content = content.replaceAll("<i class=\"ico inv\"></i>", "Инвалидное кресло");
+                }
+                if (content.startsWith("<i class=\"ico double-armchair\"></i>")) {
+                    content = content.replaceAll("<i class=\"ico double-armchair\"></i>", "Двойное кресло");
+                }
+                if (content.startsWith("<i class=\"ico triple-armchair\"></i>")) {
+                    content = content.replaceAll("<i class=\"ico triple-armchair\"></i>", "Тройное кресло");
+                }
+                if (content.startsWith("<span class=\"price-data\">")) {
+                    content = content.replaceAll("<span class=\"price-data\">", "Цена: ");
+                }
+                if (content.startsWith("Время: <span style='display:none;'>24")) {
+                    content = content.replaceAll("<span style='display:none;'>24", "");
+                    content = content.replaceAll("</span>", "");
+                }
+                if (content.endsWith("</span>")) {
+                    content = content.replaceAll("</span>", "");
+                }
+                if (content.endsWith("</a>")) {
+                    content = content.replaceAll("</a>", "");
+                }
+                if (content.contains("~")) {
+                    content = content.replaceAll("~", "");
+                }
+                if (content.contains("Dolby Atmos")) {
+                    content = content.replaceAll("Dolby Atmos", "");
+                }
+                content = content.trim();
                 cleanSchedule.add(content);
             }
             return cleanSchedule;
@@ -242,6 +282,9 @@ public class Cinema {
                 if (string.startsWith("Фильм:")) {
                     count++;
                 }
+            }
+            while (!cleanSchedule.get(0).startsWith("Время:")) {
+                cleanSchedule.remove(0);
             }
             List<Show> realSchedule = new ArrayList<>(count);
             for (int i = 0; i < count; i++) {
@@ -269,16 +312,39 @@ public class Cinema {
                     show.setAuditorium(cleanSchedule.get(stringPosition));
                     stringPosition++;
                 }
-                if (cleanSchedule.get(stringPosition).startsWith("Цена:")) {
-                    show.getPrice().add(cleanSchedule.get(stringPosition));
+                if (stringPosition < cleanSchedule.size() && lineIsAChairTypeData(cleanSchedule.get(stringPosition))) {
                     stringPosition++;
-                    while (stringPosition < cleanSchedule.size() && cleanSchedule.get(stringPosition).startsWith("Цена")) {
+                }
+                if (stringPosition < cleanSchedule.size() && cleanSchedule.get(stringPosition).startsWith("Цена:")) {
+                    if (lineIsAChairTypeData(cleanSchedule.get(stringPosition - 1))) {
+                        show.getPrice().add(cleanSchedule.get(stringPosition - 1));
                         show.getPrice().add(cleanSchedule.get(stringPosition));
                         stringPosition++;
+                        while (stringPosition < cleanSchedule.size() && lineIsAChairTypeData(cleanSchedule.get(stringPosition))) {
+                            stringPosition++;
+                            if (cleanSchedule.get(stringPosition).startsWith("Цена")) {
+                                show.getPrice().add(cleanSchedule.get(stringPosition - 1));
+                                show.getPrice().add(cleanSchedule.get(stringPosition));
+                                stringPosition++;
+                            }
+                        }
+                    } else {
+                        while (stringPosition < cleanSchedule.size() && cleanSchedule.get(stringPosition).startsWith("Цена:")) {
+                            show.getPrice().add(cleanSchedule.get(stringPosition));
+                            stringPosition++;
+                        }
                     }
                 }
             }
             return realSchedule;
+        }
+
+        private boolean lineIsAChairTypeData(String string) {
+            return string.equalsIgnoreCase("Сиденье") ||
+                    string.equalsIgnoreCase("Кресло") ||
+                    string.equalsIgnoreCase("Инвалидное кресло") ||
+                    string.equalsIgnoreCase("Двойное кресло") ||
+                    string.equalsIgnoreCase("Тройное кресло");
         }
 
         private boolean checkStringForStartingByOnlyRussianLettersOrDigits(String string) {
