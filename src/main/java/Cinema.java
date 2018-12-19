@@ -178,12 +178,17 @@ public class Cinema {
             List<String> rawDataList = new ArrayList<>();
             for (String string : slices) {
                 string = string.trim();
+                if (string.startsWith("<span class=\"price\" title=\"") || string.startsWith("<span class=\"price last\" title=\"")) {
+                    continue;
+                }
                 if (string.startsWith("<td class=\"col1\">")     //время    (time)
                         || (checkStringForStartingByOnlyRussianLettersOrDigits(string) && string.endsWith("</a>"))  //название фильма   (film name)
                         || (string.contains("Цифровой") || string.contains("Трехмерная"))   //формат    (format)
                         || checkStringForBeingAnAgeLimit(string)    //возрастное ограничение    (age limit)
                         || string.startsWith("<b>Зал")   //зал  (auditorium)
-                        || string.contains("<span class=\"price-data\">")   //цена  (price)
+                        || (string.startsWith("<b>Молния</b>") || string.startsWith("<b>Синема</b>") || string.startsWith("<b>Мираж</b>") || string.startsWith("<b>Венеция VIP</b>"))   //зал для кинотеатра на Большом в СПб  (auditorium for cinema on Bolshoi prospekt in SPb)
+                        || (string.startsWith("<b>Красный</b>") || string.startsWith("<b>Бирюзовый</b>"))   //зал для кинотеатра в Гулливере в СПб  (auditorium for cinema in Gulliver in SPb)
+                        || string.contains("<span class=\"price")   //цена  (price)
                         || string.startsWith("<i class=\"ico chair\"></i>")    //сиденье   (chair)
                         || string.startsWith("<i class=\"ico inv\"></i>")    //инвалидное кресло    (invalid armchair)
                         || string.startsWith("<i class=\"ico armchair\"></i>")    //кресло  (armchair)
@@ -217,6 +222,13 @@ public class Cinema {
                     content = content.replaceAll("<b>Зал", "Зал:");
                     content = content.replaceAll("</b>", "");
                 }
+                if ((content.startsWith("<b>Молния</b>") || content.startsWith("<b>Синема</b>")
+                        || content.startsWith("<b>Мираж</b>")|| content.startsWith("<b>Венеция VIP</b>"))
+                        || content.startsWith("<b>Красный</b>") || content.startsWith("<b>Бирюзовый</b>")) {
+                    content = content.replaceAll("</b>", "");
+                    content = content.replaceAll("<b>", "");
+                    content = "Зал: " + content;
+                }
                 if (content.startsWith("<td class=\"col1\"><b>")) {
                     content = content.replaceAll("<td class=\"col1\"><b>", "Время: ");
                     content = content.replaceAll("</b>", "");
@@ -245,15 +257,24 @@ public class Cinema {
                 if (content.startsWith("<i class=\"ico triple-armchair\"></i>")) {
                     content = content.replaceAll("<i class=\"ico triple-armchair\"></i>", "Тройное кресло");
                 }
-                if (content.startsWith("<span class=\"price-data\">")) {
-                    content = content.replaceAll("<span class=\"price-data\">", "Цена: ");
+                if (content.startsWith("<span class=\"price")) {
+                    if (content.startsWith("<span class=\"price-data\">")) {
+                        content = content.replaceAll("<span class=\"price-data\">", "Цена: ");
+                    } else if (content.startsWith("<span class=\"price\">")) {
+                        content = content.replaceFirst("<span class=\"price\">", "Цена: ");
+                        content = content.replaceAll("<span class=\"price\"></span>", "");
+                        content = content.replaceAll("<span class=\"price last\"></span>", "");
+                        content = content.replaceAll("</span> ", "");
+                        content = content.trim();
+                    }
                 }
                 if (content.startsWith("Время: <span style='display:none;'>24")) {
                     content = content.replaceAll("<span style='display:none;'>24", "");
                     content = content.replaceAll("</span>", "");
                 }
-                if (content.endsWith("</span>")) {
+                if (content.endsWith("</span>") || content.endsWith("</span> ")) {
                     content = content.replaceAll("</span>", "");
+                    content = content.replaceAll("</span> ", "");
                 }
                 if (content.endsWith("</a>")) {
                     content = content.replaceAll("</a>", "");
