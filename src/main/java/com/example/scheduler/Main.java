@@ -1,3 +1,5 @@
+package com.example.scheduler;
+
 /**
  * Mirage Cinema Scheduler
  *
@@ -7,7 +9,6 @@
  *
  * @author Michael Kolbasov
  * @version 1.0
- * @since 1.8
  */
 public class Main {
 
