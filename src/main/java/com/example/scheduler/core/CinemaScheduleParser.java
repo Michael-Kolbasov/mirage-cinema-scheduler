@@ -1,5 +1,6 @@
-package com.example.scheduler;
+package com.example.scheduler.core;
 
+import com.example.scheduler.exception.SchedulerException;
 import com.example.scheduler.model.Cinema;
 import com.example.scheduler.model.Show;
 
@@ -31,6 +32,9 @@ public class CinemaScheduleParser {
      * @param date  a date for schedule.
      */
     public List<Show> parseScheduleByDateAndLink(Cinema cinema, LocalDate date) {
+        if (cinema == null || date == null) {
+            throw new SchedulerException("Пожалуйста, выберите кинотеатр и дату.");
+        }
         String cinemaLink = cinema.getLink();
         String dateLink = date.toString().replaceAll("-", "");
         cinemaLink = cinemaLink.replaceAll("---DATEINFO---", dateLink);

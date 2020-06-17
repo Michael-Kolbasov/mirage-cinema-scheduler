@@ -1,0 +1,8 @@
+version: '2'
+services:
+  scheduler:
+    image: badgerbadgerbadgerbadger/scheduler:latest
+    build: .
+    environment:
+      - BOT_USERNAME=${BOT_USERNAME}
+      - BOT_TOKEN=${BOT_TOKEN}

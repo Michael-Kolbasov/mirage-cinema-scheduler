@@ -1,4 +1,4 @@
-package com.example.scheduler;
+package com.example.scheduler.core;
 
 import com.example.scheduler.model.Cinema;
 import com.example.scheduler.model.City;

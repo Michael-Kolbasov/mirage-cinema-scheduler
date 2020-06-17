@@ -1,4 +1,4 @@
-package com.example.scheduler;
+package com.example.scheduler.core;
 
 /**
  * Mirage Cinema Scheduler
