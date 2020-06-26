@@ -5,6 +5,7 @@ import com.example.scheduler.exception.SchedulerException;
 import com.example.scheduler.model.Cinema;
 import com.example.scheduler.model.City;
 import com.example.scheduler.model.Show;
+import com.example.scheduler.tg.util.LocalDateTransformer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -165,7 +166,7 @@ public class UpdateDispatcherService implements DispatcherServiceI {
     }
 
     private static LocalDate addDateToButtonsAndIncrement(List<InlineKeyboardButton> line, LocalDate date) {
-        InlineKeyboardButton button = createInlineKeyboardButton(date.toString(), date.toString());
+        InlineKeyboardButton button = createInlineKeyboardButton(LocalDateTransformer.transform(date), date.toString());
         line.add(button);
         return date.plusDays(1);
     }
@@ -183,6 +184,10 @@ public class UpdateDispatcherService implements DispatcherServiceI {
                 buttons.add(line);
                 line = new ArrayList<>();
             }
+        }
+
+        if (line.size() != 0) {
+            buttons.add(line);
         }
 
         return new InlineKeyboardMarkup(buttons);
