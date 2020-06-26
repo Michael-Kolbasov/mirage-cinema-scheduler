@@ -26,17 +26,22 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Pattern;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 @Component
 public class UpdateDispatcherService implements DispatcherServiceI {
+    private static final String DATE_PATTERN = "^\\d{4}-\\d{2}-\\d{2}$";
     private static final String START = "/start";
-    private static final Pattern DATE_PATTERN = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
     private static final String CHOOSE_START = "Чтобы начать, введите /start";
+    private static final String CHOOSE_CITY = "Выберите город:";
+    private static final String CHOOSE_CINEMA = "Выберите кинотеатр:";
+    private static final String CHOOSE_DATE = "Выберите дату:";
+    private static final String NO_FILMS = "Сеансов нет.";
     private static final List<City> CITIES = Arrays.asList(City.values());
     private static final List<Cinema> CINEMAS = Arrays.asList(Cinema.values());
-    private static final int ROWS_PER_SCREEN = 3;
+    private static final int OPTIONS_PER_LINE = 3;
+    private static final int DATES_PER_LINE = 2;
     private static final ReplyKeyboard CITIES_KEYBOARD = createCitiesKeyboard();
     private static final Map<City, ReplyKeyboard> CINEMAS_KEYBOARD = createCinemasKeyboard();
 
@@ -44,7 +49,7 @@ public class UpdateDispatcherService implements DispatcherServiceI {
     private TelegramLongPollingBot bot;
 
     private final CinemaScheduleParser parser = new CinemaScheduleParser();
-    private final Map<Integer, Cinema> chosenCinemas = new ConcurrentHashMap<>();
+    private final Map<Long, Cinema> chosenCinemas = new ConcurrentHashMap<>();
 
     @Override
     public void dispatch(Update update) {
@@ -63,7 +68,7 @@ public class UpdateDispatcherService implements DispatcherServiceI {
                 showCinemas(update);
             } else if (CINEMAS.contains(Cinema.byName(data))) {
                 showsDates(update);
-            } else if (DATE_PATTERN.matcher(data).matches()) {
+            } else if (data.matches(DATE_PATTERN)) {
                 showSchedule(update);
             } else {
                 sendMsg(callbackQuery, CHOOSE_START);
@@ -74,23 +79,25 @@ public class UpdateDispatcherService implements DispatcherServiceI {
     }
 
     private void showCities(Update update) {
-        SendMessage sendMessage = new SendMessage(update.getMessage().getChatId(), "Выберите город:");
+        SendMessage sendMessage = new SendMessage(update.getMessage().getChatId(), CHOOSE_CITY);
         sendMessage.setReplyMarkup(CITIES_KEYBOARD);
         sendMsg(sendMessage);
     }
 
     private void showCinemas(Update update) {
-        SendMessage sendMessage = new SendMessage(update.getCallbackQuery().getMessage().getChatId(), "Выберите кинотеатр:");
+        SendMessage sendMessage = new SendMessage(update.getCallbackQuery().getMessage().getChatId(), CHOOSE_CINEMA);
         City city = City.byName(update.getCallbackQuery().getData());
         sendMessage.setReplyMarkup(CINEMAS_KEYBOARD.get(city));
         sendMsg(sendMessage);
     }
 
     private void showsDates(Update update) {
-        chosenCinemas.put(update.getCallbackQuery().getFrom().getId(), Cinema.byName(update.getCallbackQuery().getData()));
+        Long chatId = update.getCallbackQuery().getMessage().getChatId();
+        Cinema cinema = Cinema.byName(update.getCallbackQuery().getData());
+        chosenCinemas.put(chatId, cinema);
 
-        SendMessage sendMessage = new SendMessage(update.getCallbackQuery().getMessage().getChatId(), "Выберите дату:");
-        LocalDate today = LocalDate.now();
+        SendMessage sendMessage = new SendMessage(chatId, CHOOSE_DATE);
+        LocalDate today = LocalDate.now(cinema.getCity().getTimeZone());
         ReplyKeyboard dates = createDates(today);
         sendMessage.setReplyMarkup(dates);
         sendMsg(sendMessage);
@@ -98,20 +105,24 @@ public class UpdateDispatcherService implements DispatcherServiceI {
 
     private void showSchedule(Update update) {
         Long chatId = update.getCallbackQuery().getMessage().getChatId();
+        String date = update.getCallbackQuery().getData();
+
         SendMessage sendMessage = new SendMessage();
         sendMessage.setChatId(chatId);
 
         List<Show> schedule;
         try {
-            schedule = parser.parseScheduleByDateAndLink(chosenCinemas.get(update.getCallbackQuery().getFrom().getId()), LocalDate.parse(update.getCallbackQuery().getData()));
+            schedule = parser.parseScheduleByDateAndLink(chosenCinemas.get(chatId), LocalDate.parse(date));
         } catch (SchedulerException e) {
             sendMessage.setText(e.getMessage());
             sendMsg(sendMessage);
             return;
         }
 
+        chosenCinemas.remove(chatId);
+
         if (schedule.size() == 0) {
-            sendMessage.setText("Сеансов нет.");
+            sendMessage.setText(NO_FILMS);
         } else {
             String shows = schedule.stream()
                     .map(Show::toString)
@@ -123,44 +134,55 @@ public class UpdateDispatcherService implements DispatcherServiceI {
     }
 
     private static ReplyKeyboard createDates(LocalDate today) {
-        List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
-        List<InlineKeyboardButton> buttons1 = new ArrayList<>();
-        LocalDate date = today;
-        if (date.getDayOfWeek().compareTo(DayOfWeek.THURSDAY) >= 0) {
-            do {
-                InlineKeyboardButton button = new InlineKeyboardButton();
-                button.setText(date.toString());
-                button.setCallbackData(date.toString());
-                buttons1.add(button);
-                date = date.plusDays(1);
-            } while (date.getDayOfWeek() != DayOfWeek.MONDAY);
-        } else {
-            do {
-                InlineKeyboardButton button = new InlineKeyboardButton();
-                button.setText(date.toString());
-                button.setCallbackData(date.toString());
-                buttons1.add(button);
-                date = date.plusDays(1);
-            } while (date.getDayOfWeek() != DayOfWeek.THURSDAY);
-        }
-        buttons.add(buttons1);
+        List<List<InlineKeyboardButton>> buttons = fillDates(
+                today,
+                day -> day.getDayOfWeek() == DayOfWeek.MONDAY,
+                day -> day.getDayOfWeek() == DayOfWeek.THURSDAY);
         return new InlineKeyboardMarkup(buttons);
+    }
+
+    private static List<List<InlineKeyboardButton>> fillDates(LocalDate date, Predicate<LocalDate> stopConditionAfterThursday, Predicate<LocalDate> stopConditionBeforeThursday) {
+        if (date.getDayOfWeek().compareTo(DayOfWeek.THURSDAY) >= 0) {
+            return iterateUntil(date, stopConditionAfterThursday);
+        } else {
+            return iterateUntil(date, stopConditionBeforeThursday);
+        }
+    }
+
+    private static List<List<InlineKeyboardButton>> iterateUntil(LocalDate date, Predicate<LocalDate> stopCondition) {
+        List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
+        List<InlineKeyboardButton> line = new ArrayList<>();
+        do {
+            if (line.size() == DATES_PER_LINE) {
+                buttons.add(line);
+                line = new ArrayList<>();
+            }
+            date = addDateToButtonsAndIncrement(line, date);
+        } while (!stopCondition.test(date));
+
+        buttons.add(line);
+        return buttons;
+    }
+
+    private static LocalDate addDateToButtonsAndIncrement(List<InlineKeyboardButton> line, LocalDate date) {
+        InlineKeyboardButton button = createInlineKeyboardButton(date.toString(), date.toString());
+        line.add(button);
+        return date.plusDays(1);
     }
 
     private static ReplyKeyboard createCitiesKeyboard() {
         List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
         int citiesSize = CITIES.size();
-        List<InlineKeyboardButton> buttons1 = new ArrayList<>();
+        List<InlineKeyboardButton> line = new ArrayList<>();
         for (int i = 0, j = 0; i < citiesSize; i++, j++) {
-            if (i != 0 && (i % ROWS_PER_SCREEN == 0 || i == citiesSize - 1)) {
-                buttons.add(buttons1);
-                buttons1 = new ArrayList<>();
-            }
             String cityName = CITIES.get(j).getName();
-            InlineKeyboardButton button = new InlineKeyboardButton();
-            button.setText(cityName);
-            button.setCallbackData(cityName);
-            buttons1.add(button);
+            InlineKeyboardButton button = createInlineKeyboardButton(cityName, cityName);
+            line.add(button);
+
+            if (line.size() == OPTIONS_PER_LINE) {
+                buttons.add(line);
+                line = new ArrayList<>();
+            }
         }
 
         return new InlineKeyboardMarkup(buttons);
@@ -172,34 +194,30 @@ public class UpdateDispatcherService implements DispatcherServiceI {
             List<Cinema> cinemas = city.getCinemas();
             List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
             int totalCinemas = cinemas.size();
-            boolean isManyCinemas = totalCinemas > ROWS_PER_SCREEN;
+            boolean isManyCinemas = totalCinemas > OPTIONS_PER_LINE;
 
-            List<InlineKeyboardButton> buttons1 = new ArrayList<>();
+            List<InlineKeyboardButton> line = new ArrayList<>();
             if (isManyCinemas) {
                 for (int i = 0, j = 0; i < totalCinemas; i++, j++) {
                     boolean isLast = i == totalCinemas - 1;
-                    boolean isDivisibleByN = i % ROWS_PER_SCREEN == 0;
+                    boolean isDivisibleByN = i % OPTIONS_PER_LINE == 0;
                     boolean isFirst = i == 0;
                     if (!isFirst && (isDivisibleByN || isLast)) {
-                        buttons.add(buttons1);
-                        buttons1 = new ArrayList<>();
+                        buttons.add(line);
+                        line = new ArrayList<>();
                     }
-                    InlineKeyboardButton button = new InlineKeyboardButton();
-                    button.setText(cinemas.get(j).getSimpleName());
-                    button.setCallbackData(cinemas.get(j).getFormalName());
-                    buttons1.add(button);
+                    InlineKeyboardButton button = createInlineKeyboardButton(cinemas.get(j).getSimpleName(), cinemas.get(j).getFormalName());
+                    line.add(button);
                     if (isLast) {
-                        buttons.add(buttons1);
+                        buttons.add(line);
                     }
                 }
             } else {
                 for (int i = 0, j = 0; i < totalCinemas; i++, j++) {
-                    InlineKeyboardButton button = new InlineKeyboardButton();
-                    button.setText(cinemas.get(j).getSimpleName());
-                    button.setCallbackData(cinemas.get(j).getFormalName());
-                    buttons1.add(button);
+                    InlineKeyboardButton button = createInlineKeyboardButton(cinemas.get(j).getSimpleName(), cinemas.get(j).getFormalName());
+                    line.add(button);
                 }
-                buttons.add(buttons1);
+                buttons.add(line);
             }
 
             InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup(buttons);
@@ -227,5 +245,11 @@ public class UpdateDispatcherService implements DispatcherServiceI {
         SendMessage sendMessage = new SendMessage(query.getMessage().getChatId(), text);
         sendMessage.enableMarkdown(true);
         sendMsg(sendMessage);
+    }
+
+    private static InlineKeyboardButton createInlineKeyboardButton(String text, String callbackData) {
+        InlineKeyboardButton button = new InlineKeyboardButton(text);
+        button.setCallbackData(callbackData);
+        return button;
     }
 }

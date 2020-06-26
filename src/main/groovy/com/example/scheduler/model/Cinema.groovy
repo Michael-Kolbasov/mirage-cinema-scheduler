@@ -48,7 +48,7 @@ enum Cinema {
     }
 
     City getCity() {
-        City.valueOf(city)
+        City.byName(city)
     }
 
     static Cinema byName(String name) {
